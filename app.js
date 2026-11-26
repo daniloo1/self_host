@@ -17,6 +17,9 @@ const state = {
   entries: [],
   activeFile: null,
   activeBlob: null,
+  activeRawText: null,
+  isEditing: false,
+  localCache: new Map(),
   pdfDoc: null,
   pdfScale: 1.25,
 };
@@ -33,6 +36,9 @@ const els = {
   viewerTitle: document.getElementById("current-file-name"),
   viewerMeta: document.getElementById("current-file-meta"),
   viewerContent: document.getElementById("viewer-content"),
+  editBtn: document.getElementById("edit-btn"),
+  saveEditBtn: document.getElementById("save-edit-btn"),
+  cancelEditBtn: document.getElementById("cancel-edit-btn"),
   downloadBtn: document.getElementById("download-btn"),
   pdfControls: document.getElementById("pdf-controls"),
   zoomInBtn: document.getElementById("zoom-in-btn"),
@@ -46,6 +52,19 @@ const els = {
   patInput: document.getElementById("pat-input"),
   fileInput: document.getElementById("file-input"),
   uploadStatus: document.getElementById("upload-status"),
+  openNewBtn: document.getElementById("open-new-btn"),
+  newFileDialog: document.getElementById("new-file-dialog"),
+  closeNewBtn: document.getElementById("close-new-btn"),
+  newFileForm: document.getElementById("new-file-form"),
+  newFileTargetPath: document.getElementById("new-file-target-path"),
+  newFileName: document.getElementById("new-file-name"),
+  newFileContent: document.getElementById("new-file-content"),
+  newPatInput: document.getElementById("new-pat-input"),
+  newFileStatus: document.getElementById("new-file-status"),
+  patDialog: document.getElementById("pat-dialog"),
+  patForm: document.getElementById("pat-form"),
+  quickPatInput: document.getElementById("quick-pat-input"),
+  closePatBtn: document.getElementById("close-pat-btn"),
 };
 
 function detectRepoFromLocation() {
@@ -86,8 +105,10 @@ async function fetchDirectory(path) {
   renderBreadcrumbs();
 
   const url = `https://api.github.com/repos/${state.owner}/${state.repo}/contents/${encodePath(path)}`;
+  const pat = sessionStorage.getItem("gh_upload_pat");
+  const headers = pat ? { Authorization: `Bearer ${pat}` } : {};
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { headers, cache: "no-store" });
     if (!res.ok) {
       throw new Error(`GitHub API ${res.status}`);
     }
@@ -164,6 +185,10 @@ function renderFileList() {
 }
 
 async function fetchFileBuffer(item) {
+  // Se il file e' stato appena salvato in questa sessione, usa i dati freschi in memoria
+  if (state.localCache.has(item.path)) {
+    return state.localCache.get(item.path).slice(0);
+  }
   // Su GitHub Pages possiamo leggere direttamente il file relativo senza consumare rate limit API
   if (window.location.hostname.endsWith(".github.io") || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
     const relRes = await fetch(`./${encodePath(item.path)}`);
@@ -177,14 +202,27 @@ async function fetchFileBuffer(item) {
   return await res.arrayBuffer();
 }
 
+function updateViewerActionButtons(ext) {
+  const isTextEditable = ext === ".md" || ext === ".txt";
+  els.editBtn.classList.toggle("hidden", !isTextEditable || state.isEditing);
+  els.saveEditBtn.classList.toggle("hidden", !state.isEditing);
+  els.cancelEditBtn.classList.toggle("hidden", !state.isEditing);
+  els.downloadBtn.classList.toggle("hidden", state.isEditing || !state.activeBlob);
+}
+
 async function openFile(item) {
   state.activeFile = item;
   state.activeBlob = null;
+  state.activeRawText = null;
+  state.isEditing = false;
   state.pdfDoc = null;
   renderFileList();
 
   els.viewerTitle.textContent = item.name;
   els.viewerMeta.textContent = formatBytes(item.size);
+  els.editBtn.classList.add("hidden");
+  els.saveEditBtn.classList.add("hidden");
+  els.cancelEditBtn.classList.add("hidden");
   els.downloadBtn.classList.add("hidden");
   els.pdfControls.classList.add("hidden");
   els.viewerContent.innerHTML = `<p class="status-msg">Apertura di ${item.name}...</p>`;
@@ -200,13 +238,15 @@ async function openFile(item) {
         : "text/plain;charset=utf-8";
 
     state.activeBlob = new Blob([buffer], { type: mime });
-    els.downloadBtn.classList.remove("hidden");
+    updateViewerActionButtons(ext);
 
     if (ext === ".md") {
       const text = new TextDecoder("utf-8").decode(buffer);
+      state.activeRawText = text;
       renderMarkdown(text);
     } else if (ext === ".txt") {
       const text = new TextDecoder("utf-8").decode(buffer);
+      state.activeRawText = text;
       renderText(text);
     } else if (ext === ".pdf") {
       await renderPdf(buffer);
@@ -342,6 +382,172 @@ function arrayBufferToBase64(buffer) {
   return btoa(binary);
 }
 
+async function saveBufferToGitHub(targetPath, buffer, pat, commitMessage) {
+  const apiUrl = `https://api.github.com/repos/${state.owner}/${state.repo}/contents/${encodePath(targetPath)}`;
+  const headers = {
+    Authorization: `Bearer ${pat}`,
+    Accept: "application/vnd.github+json",
+  };
+
+  let existingSha;
+  const checkRes = await fetch(apiUrl, { headers, cache: "no-store" });
+  if (checkRes.ok) {
+    const existing = await checkRes.json();
+    existingSha = existing.sha;
+  }
+
+  const content = arrayBufferToBase64(buffer);
+  const putRes = await fetch(apiUrl, {
+    method: "PUT",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: commitMessage,
+      content,
+      ...(existingSha ? { sha: existingSha } : {}),
+    }),
+  });
+
+  if (!putRes.ok) {
+    const errBody = await putRes.json().catch(() => ({}));
+    throw new Error(errBody.message || `Errore ${putRes.status}`);
+  }
+
+  state.localCache.set(targetPath, buffer.slice(0));
+  return await putRes.json();
+}
+
+function promptForPat() {
+  const saved = sessionStorage.getItem("gh_upload_pat");
+  if (saved) return Promise.resolve(saved);
+
+  return new Promise((resolve) => {
+    els.quickPatInput.value = "";
+    els.patDialog.showModal();
+
+    const cleanup = () => {
+      els.patForm.removeEventListener("submit", onSubmit);
+      els.closePatBtn.removeEventListener("click", onCancel);
+      els.patDialog.removeEventListener("cancel", onCancel);
+    };
+
+    const onSubmit = (e) => {
+      e.preventDefault();
+      const pat = els.quickPatInput.value.trim();
+      if (!pat) return;
+      sessionStorage.setItem("gh_upload_pat", pat);
+      cleanup();
+      els.patDialog.close();
+      resolve(pat);
+    };
+
+    const onCancel = () => {
+      cleanup();
+      els.patDialog.close();
+      resolve(null);
+    };
+
+    els.patForm.addEventListener("submit", onSubmit);
+    els.closePatBtn.addEventListener("click", onCancel);
+    els.patDialog.addEventListener("cancel", onCancel);
+  });
+}
+
+function renderActiveTextPreview() {
+  if (!state.activeFile) return;
+  const ext = getExt(state.activeFile.name);
+  if (ext === ".md") {
+    renderMarkdown(state.activeRawText);
+  } else {
+    renderText(state.activeRawText);
+  }
+}
+
+function enterEditMode() {
+  if (!state.activeFile || state.activeRawText === null) return;
+  state.isEditing = true;
+  updateViewerActionButtons(getExt(state.activeFile.name));
+
+  const wrap = document.createElement("div");
+  wrap.className = "editor-wrap";
+
+  const textarea = document.createElement("textarea");
+  textarea.id = "live-editor-textarea";
+  textarea.className = "editor-textarea";
+  textarea.value = state.activeRawText;
+
+  const status = document.createElement("div");
+  status.id = "live-editor-status";
+  status.className = "editor-status";
+  status.textContent = "Modifica in corso — premi Ctrl+S / Cmd+S o clicca 'Salva su GitHub' per applicare.";
+
+  textarea.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+      e.preventDefault();
+      saveCurrentEdit();
+    }
+  });
+
+  wrap.append(textarea, status);
+  els.viewerContent.innerHTML = "";
+  els.viewerContent.appendChild(wrap);
+  textarea.focus();
+}
+
+function exitEditMode() {
+  if (!state.activeFile) return;
+  state.isEditing = false;
+  updateViewerActionButtons(getExt(state.activeFile.name));
+  renderActiveTextPreview();
+}
+
+async function saveCurrentEdit() {
+  if (!state.activeFile) return;
+  const textarea = document.getElementById("live-editor-textarea");
+  const statusEl = document.getElementById("live-editor-status");
+  if (!textarea) return;
+
+  const pat = await promptForPat();
+  if (!pat) return;
+
+  const newText = textarea.value;
+  const buffer = new TextEncoder().encode(newText).buffer;
+  els.saveEditBtn.disabled = true;
+  if (statusEl) statusEl.textContent = "Salvataggio su GitHub in corso...";
+
+  try {
+    const result = await saveBufferToGitHub(
+      state.activeFile.path,
+      buffer,
+      pat,
+      `Update ${state.activeFile.name} via web editor`
+    );
+
+    state.activeRawText = newText;
+    const ext = getExt(state.activeFile.name);
+    const mime = ext === ".md" ? "text/markdown;charset=utf-8" : "text/plain;charset=utf-8";
+    state.activeBlob = new Blob([buffer], { type: mime });
+    if (result?.content?.size !== undefined) {
+      state.activeFile.size = result.content.size;
+      els.viewerMeta.textContent = formatBytes(result.content.size);
+    }
+
+    state.isEditing = false;
+    updateViewerActionButtons(ext);
+    renderActiveTextPreview();
+  } catch (err) {
+    if (err.message.includes("401") || err.message.includes("Bad credentials")) {
+      sessionStorage.removeItem("gh_upload_pat");
+    }
+    if (statusEl) statusEl.textContent = `Errore durante il salvataggio: ${err.message}`;
+  } finally {
+    els.saveEditBtn.disabled = false;
+  }
+}
+
+els.editBtn.addEventListener("click", enterEditMode);
+els.cancelEditBtn.addEventListener("click", exitEditMode);
+els.saveEditBtn.addEventListener("click", saveCurrentEdit);
+
 els.uploadForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const pat = els.patInput.value.trim();
@@ -354,35 +560,8 @@ els.uploadForm.addEventListener("submit", async (e) => {
   try {
     for (const file of files) {
       const targetPath = `${state.currentPath}/${file.name}`;
-      const apiUrl = `https://api.github.com/repos/${state.owner}/${state.repo}/contents/${encodePath(targetPath)}`;
-      const headers = {
-        Authorization: `Bearer ${pat}`,
-        Accept: "application/vnd.github+json",
-      };
-
-      // Verifica se il file esiste gia' per ottenere lo sha
-      let existingSha;
-      const checkRes = await fetch(apiUrl, { headers });
-      if (checkRes.ok) {
-        const existing = await checkRes.json();
-        existingSha = existing.sha;
-      }
-
-      const content = arrayBufferToBase64(await file.arrayBuffer());
-      const putRes = await fetch(apiUrl, {
-        method: "PUT",
-        headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: `Upload ${file.name} via web`,
-          content,
-          ...(existingSha ? { sha: existingSha } : {}),
-        }),
-      });
-
-      if (!putRes.ok) {
-        const errBody = await putRes.json().catch(() => ({}));
-        throw new Error(errBody.message || `Errore ${putRes.status}`);
-      }
+      const buffer = await file.arrayBuffer();
+      await saveBufferToGitHub(targetPath, buffer, pat, `Upload ${file.name} via web`);
     }
 
     els.uploadStatus.textContent = "Caricamento completato! GitHub Pages si aggiornera' in ~30 secondi.";
@@ -390,6 +569,67 @@ els.uploadForm.addEventListener("submit", async (e) => {
     await fetchDirectory(state.currentPath);
   } catch (err) {
     els.uploadStatus.textContent = `Errore: ${err.message}`;
+  }
+});
+
+// Creazione nuovo file di testo / Markdown direttamente da web
+els.openNewBtn.addEventListener("click", () => {
+  els.newFileTargetPath.textContent = state.currentPath;
+  els.newFileName.value = "";
+  els.newFileContent.value = "";
+  els.newFileStatus.textContent = "";
+  els.newPatInput.value = sessionStorage.getItem("gh_upload_pat") || "";
+  els.newFileDialog.showModal();
+  els.newFileName.focus();
+});
+
+els.closeNewBtn.addEventListener("click", () => els.newFileDialog.close());
+
+els.newFileForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  let fileName = els.newFileName.value.trim().replace(/^\/+/, "");
+  const pat = els.newPatInput.value.trim();
+  const text = els.newFileContent.value;
+  if (!fileName || !pat) return;
+
+  if (!fileName.toLowerCase().endsWith(".md") && !fileName.toLowerCase().endsWith(".txt")) {
+    fileName += ".md";
+  }
+
+  sessionStorage.setItem("gh_upload_pat", pat);
+  els.newFileStatus.textContent = "Salvataggio su GitHub in corso...";
+
+  try {
+    const targetPath = `${state.currentPath}/${fileName}`;
+    const buffer = new TextEncoder().encode(text).buffer;
+    const result = await saveBufferToGitHub(
+      targetPath,
+      buffer,
+      pat,
+      `Create ${fileName} via web`
+    );
+
+    els.newFileDialog.close();
+    await fetchDirectory(state.currentPath);
+
+    let createdItem = state.entries.find((entry) => entry.path === targetPath);
+    if (!createdItem) {
+      createdItem = {
+        name: fileName,
+        path: targetPath,
+        type: "file",
+        size: result?.content?.size ?? buffer.byteLength,
+        download_url: result?.content?.download_url || "",
+      };
+      state.entries.push(createdItem);
+      state.entries.sort((a, b) => {
+        if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+        return a.name.localeCompare(b.name, "it", { sensitivity: "base" });
+      });
+    }
+    await openFile(createdItem);
+  } catch (err) {
+    els.newFileStatus.textContent = `Errore: ${err.message}`;
   }
 });
 

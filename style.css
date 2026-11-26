@@ -66,6 +66,12 @@ html, body {
   font-weight: 600;
 }
 
+.sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .search-box {
   padding: 10px 12px 6px;
 }
@@ -395,6 +401,58 @@ html, body {
   margin: 0;
   font-size: 0.85rem;
   color: #cf222e;
+}
+
+/* Live Editor */
+.editor-wrap {
+  max-width: 900px;
+  height: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor-textarea {
+  flex: 1;
+  width: 100%;
+  min-height: 360px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-muted);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.94rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.editor-textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+.editor-status {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.dialog-wide {
+  max-width: 580px;
+}
+
+.new-file-textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  resize: vertical;
 }
 
 .dialog {

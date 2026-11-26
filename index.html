@@ -4,13 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Archivio Documenti</title>
-  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="stylesheet" href="style.css?v=3" />
   <!-- Marked & DOMPurify per Markdown / Note Obsidian -->
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
   <!-- PDF.js per visualizzazione PDF in-page senza download locale -->
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js" defer></script>
-  <script src="app.js?v=2" defer></script>
+  <script src="app.js?v=3" defer></script>
 </head>
 <body>
   <div id="auth-gate" class="auth-gate">
@@ -37,7 +37,10 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <h1>Documenti</h1>
-        <button id="open-upload-btn" class="btn btn-primary btn-sm" title="Carica file su GitHub">+ Carica</button>
+        <div class="sidebar-actions">
+          <button id="open-new-btn" class="btn btn-sm" title="Crea un nuovo file di testo o Markdown">+ Nuovo</button>
+          <button id="open-upload-btn" class="btn btn-primary btn-sm" title="Carica file su GitHub">+ Carica</button>
+        </div>
       </div>
 
       <div class="search-box">
@@ -63,6 +66,9 @@
             <span id="zoom-label">100%</span>
             <button id="zoom-in-btn" class="btn btn-sm" title="Aumenta zoom">+</button>
           </div>
+          <button id="edit-btn" class="btn btn-sm hidden">Modifica</button>
+          <button id="save-edit-btn" class="btn btn-primary btn-sm hidden">Salva su GitHub</button>
+          <button id="cancel-edit-btn" class="btn btn-sm hidden">Annulla</button>
           <button id="download-btn" class="btn btn-sm hidden">Scarica</button>
         </div>
       </header>
@@ -103,6 +109,59 @@
 
       <div class="dialog-footer">
         <button type="submit" id="submit-upload-btn" class="btn btn-primary">Carica su GitHub</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modale Nuovo File (creazione testo / nota live) -->
+  <dialog id="new-file-dialog" class="dialog dialog-wide">
+    <form id="new-file-form" method="dialog" class="dialog-body">
+      <div class="dialog-header">
+        <h2>Nuovo documento di testo</h2>
+        <button type="button" id="close-new-btn" class="btn btn-sm">Chiudi</button>
+      </div>
+
+      <p class="hint">
+        Verrà creato nella cartella <code id="new-file-target-path">documents</code>. Se non specifichi l'estensione verrà usato <code>.md</code>.
+      </p>
+
+      <label class="field">
+        <span>Nome file (.md o .txt)</span>
+        <input id="new-file-name" type="text" placeholder="es. appunti.md" autocomplete="off" required />
+      </label>
+
+      <label class="field">
+        <span>Testo</span>
+        <textarea id="new-file-content" class="new-file-textarea" rows="10" placeholder="Scrivi qui il testo..."></textarea>
+      </label>
+
+      <label class="field">
+        <span>GitHub Token (necessario per salvare)</span>
+        <input id="new-pat-input" type="password" placeholder="github_pat_..." autocomplete="off" required />
+      </label>
+
+      <div id="new-file-status" class="upload-status"></div>
+
+      <div class="dialog-footer">
+        <button type="submit" id="submit-new-btn" class="btn btn-primary">Crea e salva su GitHub</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Modale Token veloce per salvataggio modifica live -->
+  <dialog id="pat-dialog" class="dialog">
+    <form id="pat-form" method="dialog" class="dialog-body">
+      <div class="dialog-header">
+        <h2>Token GitHub richiesto</h2>
+        <button type="button" id="close-pat-btn" class="btn btn-sm">Annulla</button>
+      </div>
+      <p class="hint">Inserisci il tuo Personal Access Token per salvare le modifiche su GitHub (resta salvato solo per questa scheda).</p>
+      <label class="field">
+        <span>GitHub Token</span>
+        <input id="quick-pat-input" type="password" placeholder="github_pat_..." autocomplete="off" required />
+      </label>
+      <div class="dialog-footer">
+        <button type="submit" class="btn btn-primary">Conferma e salva</button>
       </div>
     </form>
   </dialog>
