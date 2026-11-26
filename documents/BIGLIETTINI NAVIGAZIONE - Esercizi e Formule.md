@@ -1,4 +1,4 @@
-# BIGLIETTINI NAVIGAZIONE — Esercizi & Formule Rapide
+# Esercizi & Formule Rapide
 
 > Tutti gli esercizi di calcolo e intercettazione di **Navigazione** (+ virate standard) con **Domanda → Risposta** e **risoluzione lampo con formule**.
 
@@ -176,3 +176,40 @@
 - **CDI / VOR**: **1 dot = 2°** (fondo scala = **10°**)
 - **Squawk Emergenza**: **7700** Emergenza | **7600** Avaria Radio | **7500** Dirottamento | **7000** VFR EU
 
+---
+
+### Conversione numero da Binario -> Decimal 
+Dividi ripetutamente per 2 segnando il resto (0 se pari, 1 se dispari).
+Leggi i resti dal basso verso l'alto:
+
+  53 : 2 = 26   resto 1  ▲  (LSB - bit meno significativo / ultimo a destra)
+  26 : 2 = 13   resto 0  │
+  13 : 2 = 6    resto 1  │  LETTURA DAL BASSO VERSO L'ALTO
+   6 : 2 = 3    resto 0  │
+   3 : 2 = 1    resto 1  │
+   1 : 2 = 0    resto 1  │  (MSB - bit più significativo / primo a sinistra)
+
+Risultato: (53)₁₀ = (110101)₂
+
+---
+
+### DA Decimale -> Binario (
+
+> Regola Pratica
+> 1. Parti dalla potenza di 2 più grande che sta dentro al tuo numero.
+> 2. Se ci sta, metti **`1`** e sottrai il suo valore dal numero corrente.
+> 3. Se non ci sta, metti **`0`** e passi alla potenza successiva.
+> 4. Ripeti fino ad arrivare a $2^0 = 1$.
+
+#### Esempio: Convertire $53_{10}$ in Binario
+
+| Potenza di 2 | Valore | Ci sta nel residuo? | Bit | Calcolo Residuo |
+| :---: | :---: | :---: | :---: | :--- |
+| $2^5$ | **32** | **SÌ** (nel 53) | **1** | $53 - 32 = \mathbf{21}$ |
+| $2^4$ | **16** | **SÌ** (nel 21) | **1** | $21 - 16 = \mathbf{5}$ |
+| $2^3$ | **8**  | **NO** (nel 5)  | **0** | resta $\mathbf{5}$ |
+| $2^2$ | **4**  | **SÌ** (nel 5)  | **1** | $5 - 4 = \mathbf{1}$ |
+| $2^1$ | **2**  | **NO** (nell'1) | **0** | resta $\mathbf{1}$ |
+| $2^0$ | **1**  | **SÌ** (nell'1) | **1** | $1 - 1 = \mathbf{0}$ |
+
+* **Risultato:** $53_{10} = \mathbf{110101_2}$
