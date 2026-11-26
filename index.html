@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Archivio Documenti</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Marked & DOMPurify per Markdown / Note Obsidian -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js" defer></script>
+  <!-- PDF.js per visualizzazione PDF in-page senza download locale -->
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app-layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>Documenti</h1>
+        <button id="open-upload-btn" class="btn btn-primary btn-sm" title="Carica file su GitHub">+ Carica</button>
+      </div>
+
+      <div class="search-box">
+        <input id="search-input" type="search" placeholder="Filtra file..." autocomplete="off" />
+      </div>
+
+      <nav id="breadcrumbs" class="breadcrumbs" aria-label="Percorso"></nav>
+
+      <ul id="file-list" class="file-list">
+        <li class="status-msg">Caricamento...</li>
+      </ul>
+    </aside>
+
+    <main class="viewer">
+      <header class="viewer-header">
+        <div class="viewer-title-wrap">
+          <span id="current-file-name" class="viewer-title">Seleziona un documento</span>
+          <span id="current-file-meta" class="viewer-meta"></span>
+        </div>
+        <div class="viewer-actions">
+          <div id="pdf-controls" class="pdf-controls hidden">
+            <button id="zoom-out-btn" class="btn btn-sm" title="Riduci zoom">-</button>
+            <span id="zoom-label">100%</span>
+            <button id="zoom-in-btn" class="btn btn-sm" title="Aumenta zoom">+</button>
+          </div>
+          <button id="download-btn" class="btn btn-sm hidden">Scarica</button>
+        </div>
+      </header>
+
+      <section id="viewer-content" class="viewer-content">
+        <div class="empty-state">
+          <p>Seleziona un file dalla lista a sinistra per visualizzarlo direttamente qui, senza scaricarlo sul computer.</p>
+          <p class="hint">Formati supportati: <code>.md</code> (Obsidian), <code>.txt</code>, <code>.pdf</code></p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modale Upload (opzionale, solo per caricare da web) -->
+  <dialog id="upload-dialog" class="dialog">
+    <form id="upload-form" method="dialog" class="dialog-body">
+      <div class="dialog-header">
+        <h2>Carica documenti</h2>
+        <button type="button" id="close-upload-btn" class="btn btn-sm">Chiudi</button>
+      </div>
+
+      <p class="hint">
+        I file verranno caricati nella cartella corrente (<code id="upload-target-path">documents</code>).
+        Per scrivere sul repository GitHub da web serve un Personal Access Token (PAT).
+      </p>
+
+      <label class="field">
+        <span>GitHub Token (solo per upload)</span>
+        <input id="pat-input" type="password" placeholder="github_pat_..." autocomplete="off" required />
+      </label>
+
+      <label class="field">
+        <span>Seleziona file (.md, .txt, .pdf)</span>
+        <input id="file-input" type="file" accept=".md,.txt,.pdf,text/markdown,text/plain,application/pdf" multiple required />
+      </label>
+
+      <div id="upload-status" class="upload-status"></div>
+
+      <div class="dialog-footer">
+        <button type="submit" id="submit-upload-btn" class="btn btn-primary">Carica su GitHub</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
