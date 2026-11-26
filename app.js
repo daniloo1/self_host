@@ -7,6 +7,8 @@ const DEFAULT_CONFIG = {
 };
 
 const SUPPORTED_EXTS = [".md", ".txt", ".pdf"];
+const ACCESS_HASH = "dcf22513755fa9943891995b22ad6ee5f66223ecc5385bdbeee2ad1f06ebe1f5";
+const UNLOCK_KEY = "doc_viewer_unlocked";
 
 const state = {
   owner: DEFAULT_CONFIG.owner,
@@ -20,6 +22,11 @@ const state = {
 };
 
 const els = {
+  authGate: document.getElementById("auth-gate"),
+  authForm: document.getElementById("auth-form"),
+  pinInput: document.getElementById("pin-input"),
+  authError: document.getElementById("auth-error"),
+  appLayout: document.getElementById("app-layout"),
   fileList: document.getElementById("file-list"),
   breadcrumbs: document.getElementById("breadcrumbs"),
   searchInput: document.getElementById("search-input"),
@@ -386,5 +393,42 @@ els.uploadForm.addEventListener("submit", async (e) => {
   }
 });
 
-detectRepoFromLocation();
-fetchDirectory(DEFAULT_CONFIG.rootDir);
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function unlockApp() {
+  sessionStorage.setItem(UNLOCK_KEY, "1");
+  els.authGate.classList.add("hidden");
+  els.appLayout.classList.remove("hidden");
+  detectRepoFromLocation();
+  fetchDirectory(DEFAULT_CONFIG.rootDir);
+}
+
+els.pinInput.addEventListener("input", () => {
+  els.pinInput.value = els.pinInput.value.replace(/\D/g, "").slice(0, 6);
+  els.authError.classList.add("hidden");
+});
+
+els.authForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const code = els.pinInput.value.trim();
+  const hash = await sha256Hex(code);
+  if (hash === ACCESS_HASH) {
+    unlockApp();
+  } else {
+    els.authError.classList.remove("hidden");
+    els.pinInput.value = "";
+    els.pinInput.focus();
+  }
+});
+
+if (sessionStorage.getItem(UNLOCK_KEY) === "1") {
+  unlockApp();
+} else {
+  els.pinInput.focus();
+}

@@ -13,7 +13,27 @@
   <script src="app.js" defer></script>
 </head>
 <body>
-  <div class="app-layout">
+  <div id="auth-gate" class="auth-gate">
+    <form id="auth-form" class="auth-card">
+      <h1>Accesso</h1>
+      <p class="hint">Inserisci il codice numerico a 6 cifre</p>
+      <input
+        id="pin-input"
+        type="password"
+        inputmode="numeric"
+        pattern="[0-9]{6}"
+        maxlength="6"
+        placeholder="••••••"
+        autocomplete="off"
+        autofocus
+        required
+      />
+      <p id="auth-error" class="auth-error hidden">Codice errato.</p>
+      <button type="submit" class="btn btn-primary">Entra</button>
+    </form>
+  </div>
+
+  <div id="app-layout" class="app-layout hidden">
     <aside class="sidebar">
       <div class="sidebar-header">
         <h1>Documenti</h1>
