@@ -7,7 +7,7 @@ const DEFAULT_CONFIG = {
 };
 
 const SUPPORTED_EXTS = [".md", ".txt", ".pdf"];
-const ACCESS_HASH = "dcf22513755fa9943891995b22ad6ee5f66223ecc5385bdbeee2ad1f06ebe1f5";
+const ACCESS_CODE = "431643";
 const UNLOCK_KEY = "doc_viewer_unlocked";
 
 const state = {
@@ -393,14 +393,6 @@ els.uploadForm.addEventListener("submit", async (e) => {
   }
 });
 
-async function sha256Hex(value) {
-  const bytes = new TextEncoder().encode(value);
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
 function unlockApp() {
   sessionStorage.setItem(UNLOCK_KEY, "1");
   els.authGate.classList.add("hidden");
@@ -414,11 +406,10 @@ els.pinInput.addEventListener("input", () => {
   els.authError.classList.add("hidden");
 });
 
-els.authForm.addEventListener("submit", async (e) => {
+els.authForm.addEventListener("submit", (e) => {
   e.preventDefault();
   const code = els.pinInput.value.trim();
-  const hash = await sha256Hex(code);
-  if (hash === ACCESS_HASH) {
+  if (code === ACCESS_CODE) {
     unlockApp();
   } else {
     els.authError.classList.remove("hidden");
